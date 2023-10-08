@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"fmt"
 	"monkey/token"
 )
 
@@ -26,7 +25,20 @@ func (l *Lexer) NextToken() token.Token {
 
 	switch l.char {
 	case '=':
-		tok = newToken(token.ASSIGN, l.char)
+		if l.peekChar() == '=' {
+			curChar := l.char
+			l.readChar()
+			tok = token.Token{Type: token.EQ, Literal: string(curChar) + string(l.char)}
+		} else {
+			tok = newToken(token.ASSIGN, l.char)
+		}
+	case '!':
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = token.Token{Type: token.NEQ, Literal: "!="}
+		} else {
+			tok = newToken(token.BANG, l.char)
+		}
 	case '+':
 		tok = newToken(token.PLUS, l.char)
 	case '(':
@@ -41,23 +53,31 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.COMMA, l.char)
 	case ';':
 		tok = newToken(token.SEMICOLON, l.char)
+	case '-':
+		tok = newToken(token.MINUS, l.char)
+	case '/':
+		tok = newToken(token.SLASH, l.char)
+	case '*':
+		tok = newToken(token.ASTERISK, l.char)
+	case '<':
+		tok = newToken(token.LT, l.char)
+	case '>':
+		tok = newToken(token.GT, l.char)
 	case 0:
 		tok.Literal = ""
 		tok.Type = token.EOF
 
 	default:
-		fmt.Println("def")
 		if isLetter(l.char) {
 
 			tok.Literal = l.readIdentifier()
-			fmt.Printf("litera: %s", tok.Literal)
 			tok.Type = token.LookupIdentifier(tok.Literal)
 			// do I need tok.Tyoe=token.IDENT
 			return tok
 		} else if isNumber(l.char) {
-			tok.Literal = l.readIdentifier()
-			fmt.Printf("litera: %s", tok.Literal)
 			tok.Type = token.INT
+			tok.Literal = l.readNumber()
+			return tok
 		} else {
 			tok = newToken(token.ILLEGAL, l.char)
 		}
@@ -101,6 +121,14 @@ func (l *Lexer) readIdentifier() string {
 	return l.input[position:l.position]
 }
 
+func (l *Lexer) readNumber() string {
+	position := l.position
+	for isNumber(l.char) {
+		l.readChar()
+	}
+	return l.input[position:l.position]
+}
+
 func (l *Lexer) readChar() {
 	if l.readPosition >= len(l.input) {
 		l.char = 0
@@ -113,10 +141,18 @@ func (l *Lexer) readChar() {
 	l.readPosition += 1
 }
 
+func (l *Lexer) peekChar() byte {
+	if l.readPosition >= len(l.input) {
+		return 0
+	} else {
+		return l.input[l.readPosition]
+	}
+}
+
 func isLetter(ch byte) bool {
 	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
 func isNumber(ch byte) bool {
-	return '0' <= ch && 9 <= ch
+	return '0' <= ch && ch <= '9'
 }
