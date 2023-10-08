@@ -80,14 +80,18 @@ func New(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefixParseFn(token.IDENT, p.parseIdentifier)
 	p.registerPrefixParseFn(token.INT, p.parseIntegerLiteral)
+	p.registerPrefixParseFn(token.TRUE, p.parseBoolean)
+	p.registerPrefixParseFn(token.FALSE, p.parseBoolean)
 
 	p.registerPrefixParseFn(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefixParseFn(token.BANG, p.parsePrefixExpression)
 	// Read two tokens, so curToken and peekToken are both set
 
+	p.registerPrefixParseFn(token.LPAREN, p.parseGroupedExpression)
+
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
-	p.registerInfixParseFn(token.PLUS, p.parseInfixExpression)
-	p.registerInfixParseFn(token.MINUS, p.parseInfixExpression)
+	p.registerInfixParseFn(token.PLUS, p.parsePlusInfixExpression)
+	p.registerInfixParseFn(token.MINUS, p.parseMinusInfixExpression)
 	p.registerInfixParseFn(token.EQ, p.parseInfixExpression)
 	p.registerInfixParseFn(token.NEQ, p.parseInfixExpression)
 	p.registerInfixParseFn(token.ASTERISK, p.parseInfixExpression)
@@ -104,15 +108,61 @@ func (p *Parser) Errors() []string {
 	return p.errors
 }
 
+func (p *Parser) ParseProgram() *ast.Program {
+	program := &ast.Program{}
+	program.Statements = []ast.Statement{}
+
+	for p.curToken.Type != token.EOF {
+		stmt := p.parseStatement()
+		//		fmt.Printf("parsedStmt: %+v\n", stmt)
+		//		fmt.Printf("tokenType: %+v\n", p.curToken.Type)
+		if stmt != nil {
+			program.Statements = append(program.Statements, stmt)
+		}
+		p.nextToken()
+	}
+
+	fmt.Printf("prg: %+v\n", program)
+	return program
+}
+
 func (p *Parser) peekError(t token.TokenType) {
 	msg := fmt.Sprintf("expected next token to be %s, got %s instead",
 		t, p.peekToken.Type)
 	p.errors = append(p.errors, msg)
 }
 
+func (p *Parser) curTokenIs(t token.TokenType) bool {
+	return p.curToken.Type == t
+}
+
+func (p *Parser) peekTokenIs(t token.TokenType) bool {
+	return p.peekToken.Type == t
+}
+
+func (p *Parser) expectPeek(t token.TokenType) bool {
+	if p.peekTokenIs(t) {
+		p.nextToken()
+		return true
+	} else {
+		p.peekError(t)
+		return false
+	}
+}
+
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
+}
+
+// playing with coverage report tools
+func (p *Parser) parsePlusInfixExpression(left ast.Expression) ast.Expression {
+	return p.parseInfixExpression(left)
+}
+
+// playing with coverage report tools
+func (p *Parser) parseMinusInfixExpression(left ast.Expression) ast.Expression {
+	return p.parseInfixExpression(left)
 }
 
 func (p *Parser) parseLetStatement() ast.Statement {
@@ -228,21 +278,6 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	return lit
 }
 
-func (p *Parser) curTokenIs(t token.TokenType) bool {
-	return p.curToken.Type == t
-}
-func (p *Parser) peekTokenIs(t token.TokenType) bool {
-	return p.peekToken.Type == t
-}
-func (p *Parser) expectPeek(t token.TokenType) bool {
-	if p.peekTokenIs(t) {
-		p.nextToken()
-		return true
-	} else {
-		p.peekError(t)
-		return false
-	}
-}
 func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.LET:
@@ -256,20 +291,20 @@ func (p *Parser) parseStatement() ast.Statement {
 	}
 }
 
-func (p *Parser) ParseProgram() *ast.Program {
-	program := &ast.Program{}
-	program.Statements = []ast.Statement{}
+func (p *Parser) parseBoolean() ast.Expression {
+	return &ast.Boolean{
+		Token: p.curToken,
+		Value: p.curTokenIs(token.TRUE), // will return true if it's "true" or false if otherwise
+	}
+}
 
-	for p.curToken.Type != token.EOF {
-		stmt := p.parseStatement()
-		//		fmt.Printf("parsedStmt: %+v\n", stmt)
-		//		fmt.Printf("tokenType: %+v\n", p.curToken.Type)
-		if stmt != nil {
-			program.Statements = append(program.Statements, stmt)
-		}
-		p.nextToken()
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+	exp := p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
 	}
 
-	fmt.Printf("prg: %+v\n", program)
-	return program
+	return exp
 }
